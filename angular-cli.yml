@@ -1,0 +1,49 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: True
+  tasks:
+  - name: install npm
+    yum:
+     name: npm
+     state: latest
+     
+  - name: install nodejsrepo
+    shell:
+     cmd: curl -sL https://rpm.nodesource.com/setup_13.x | bash -
+
+  - name: Install nodejs
+    shell:
+     cmd: sudo yum install -y nodejs
+
+  - name: install wget
+    shell:
+     cmd: yum install wget -y
+
+  - name: Install gcc-c++
+    yum:
+     name: gcc-c++
+     state: latest
+     
+  - name: Install jdk-11
+    yum:
+     name: java-11-openjdk
+     state: latest
+     
+  - name: Install make
+    yum:
+     name: make
+     state: latest
+
+  - name: Install unzip
+    yum:
+     name: unzip
+     state: latest
+
+  - name: install Angular
+    shell:
+     cmd: npm install -g @angular/cli
+
+  - name: install webpack
+    shell:
+     cmd: npm i -g webpack && npm i -g webpack-cli

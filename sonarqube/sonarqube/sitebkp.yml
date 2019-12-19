@@ -1,0 +1,10 @@
+# This Playbook Will install sonarqube in local
+- hosts: 127.0.0.1
+  connection: local
+  gather_facts: False
+  become : yes
+  tasks:
+  - name: install the latest version of  tree
+    yum:
+      name: tree
+      state: latest

@@ -1,0 +1,65 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: True
+  tasks:
+  - name: set Selinux
+    command: setenforce 0
+
+  - name: set Selinux
+    command: sed -i s/^SELINUX=.*$/SELINUX=permissive/ /etc/selinux/config
+
+  - name: Set Ulimit
+    raw: echo "sonar   -   nofile   65536" >> /etc/security/limits.conf
+
+  - name: Set Ulimit
+    raw: echo "sonar   -   nproc    4096" >> /etc/security/limits.conf
+
+  - name: Set Ulimit
+    raw: echo "root    -   nofile   65536" >> /etc/security/limits.conf
+
+  - name: Set Ulimit
+    raw: echo "root    -   nproc    4096" >> /etc/security/limits.conf
+
+  - name: Set fs.file
+    raw: echo "fs.file-max=65536" >> /etc/sysctl.conf
+
+  - name: Set vm.max.map
+    raw: echo "vm.max_map_count=262144" >> /etc/sysctl.conf
+
+  - name: Basic lib install
+    yum: name={{ item }} state=latest update_cache=yes
+    with_items:
+    - epel-release
+    - gcc
+	- gcc-c++
+    - make
+    - cmake
+    - wget
+    - vim
+    - curl
+	- unzip
+	
+  - name: Install jdk-11
+    yum:
+     name: java-11-openjdk
+     state: latest
+	 
+  - name: install nodejsrepo
+    shell:
+     cmd: curl -sL https://rpm.nodesource.com/setup_13.x | bash -
+
+  - name: Install nodejs
+    yum:
+     name: nodejs
+     state: present
+	 
+  - name: install Angular
+    shell:
+     cmd: npm install -g @angular/cli
+
+  - name: install webpack
+    shell:
+     cmd: npm i -g webpack && npm i -g webpack-cli
+
+

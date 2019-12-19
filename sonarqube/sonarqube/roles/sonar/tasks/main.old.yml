@@ -1,0 +1,154 @@
+---
+- name: Install PostgreSQL RPM
+  yum:
+    name: https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+    state: present
+
+#- name: Removing postgreSql
+#  yum:
+#    name: postgr*
+#    state: removed
+
+#- name: remove postgres dependency
+#  shell:
+#   cmd: rm -rf /etc/sysconfig/pgsql /var/lib/pgsql /usr/share/pgsql
+ 
+- name: Install PostgreSQL
+  yum:
+    name: '{{ item }}'
+    state: latest
+  with_items:
+     - postgresql12-server
+     - postgresql12-contrib
+     - postgresql12-devel
+     - python-psycopg2
+  become: true
+  register: installed_psql
+
+- name: Intialize PostgreSQL DB
+  command: /usr/pgsql-12/bin/postgresql-12-setup initdb
+  become: true
+  when: installed_psql.changed
+
+- name: copy file pg_hba.conf
+  template:
+    src: pg_hba.conf
+    dest:  /var/lib/pgsql/12/data/pg_hba.conf
+    owner: root
+    group: root
+    mode:  0644
+
+
+- name: Enable and Start PostgreSQL
+  service:
+    name: postgresql-12
+    state: started
+    enabled: yes
+  become: true
+
+- name: Create a database for Sonar.
+  postgresql_db:
+    name: sonar
+    state: present
+
+- name: Create a sonar user.
+  postgresql_user:
+    db: sonar
+    name: sonar
+   # host: localhost
+   # priv: snoar.*:ALL
+    password: sonar123@
+  #with_items: localhost
+  become: true
+  become_user: postgres
+ 
+- name: Download Sonar.
+  get_url:
+    url: https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-7.9.1.zip
+    dest: /opt/sonarqube-7.9.1.zip
+
+- name: Unzip Sonar.
+  unarchive:
+    src: /opt/sonarqube-7.9.1.zip
+    dest: /usr/local/
+    copy: false
+    creates: /usr/local/sonar/COPYING
+
+
+- name: Move Sonar into place.
+  command: >
+    mv /usr/local/sonarqube-7.9.1 /usr/local/sonar
+    creates=/usr/local/sonar/COPYING
+- include: configure.yml
+
+- name: Add Unix Admins users
+  user: 
+   name: sonar 
+   group: users 
+   groups: wheel
+   state: present
+
+- name: Make sure we have a 'wheel' group
+  group:
+    name=wheel
+    state=present
+
+#- name: sonar group adding
+#  command: groupadd sonar
+
+- name: Changing owner to Sonar directory
+  command: chown -R sonar:sonar /usr/local/sonar
+
+- name: copy file sonar.sh
+  template:
+    src: sonar.sh
+    dest:  /usr/local/sonar/bin/linux-x86-64/sonar.sh
+    owner: sonar
+    group: sonar
+    mode:  0755
+
+- name: Symlink sonar bin.
+  file:
+    src: /usr/local/sonar/bin/linux-x86-64/sonar.sh
+    dest: /usr/bin/sonar
+    state: link
+  register: sonar_symlink
+
+- name: Add sonar as init script for service management.
+  file:
+    src: /usr/local/sonar/bin/linux-x86-64/sonar.sh
+    dest: /etc/init.d/sonar
+    state: link
+ 
+- name: Copy SonarQube systemd unit file into place (for systemd systems).
+  template:
+    src: sonar.unit.j2
+    dest: /etc/systemd/system/sonar.service
+    owner: root
+    group: root
+    mode: 0666
+
+- name: "Create user accounts"
+  user:
+   name: "sonar"
+   groups: "wheel"
+   
+- name: "Allow admin users to sudo without a password"
+  lineinfile:
+   dest: "/etc/sudoers" # path: in version 2.3
+   state: "present"
+   regexp: "^sonar"
+   line: "sonar ALL=(ALL) NOPASSWD: ALL"
+ 
+- name: Ensure Sonar is running and set to start on boot.
+  service: 
+   name=sonar 
+   state=restarted 
+   enabled=yes
+
+- name: Allow Sonar time to build on first start.
+  pause: seconds=180
+  when: sonar_symlink.changed
+  tags: ['skip_ansible_lint']
+
+

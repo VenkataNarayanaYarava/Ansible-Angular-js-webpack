@@ -1,0 +1,26 @@
+---
+- name: Configure SonarQube JDBC settings for MySQL.
+  lineinfile:
+    dest: /usr/local/sonar/conf/sonar.properties
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  notify: restart sonar
+  with_items:
+    - regexp: "^sonar.jdbc.username"
+      line: "sonar.jdbc.username=sonar"
+    - regexp: "^sonar.jdbc.password"
+      line: "sonar.jdbc.password=sonar123@"
+    - regexp: "^sonar.jdbc.url"
+      line: "sonar.jdbc.url=jdbc:postgresql://localhost/sonar"
+    - regexp: "^sonar.web.context"
+      line: "sonar.web.context=/sonar"
+    - regexp: "^sonar.web.host"
+      line: "sonar.web.host=0.0.0.0"
+    - regexp: "^sonar.web.port"
+      line: "sonar.web.port=9999"
+    - regexp: "^sonar.ce.javaOpts"
+      line: "sonar.ce.javaOpts=-Xmx2048m -Xms2048m -XX:+HeapDumpOnOutOfMemoryError"
+    - regexp: "^sonar.search.javaOpts"
+      line: "sonar.search.javaOpts=-Xmx2048m -Xms2048m -XX:+HeapDumpOnOutOfMemoryError"
+    - regexp: "^sonar.web.javaOpts"
+      line: "sonar.web.javaOpts=-Xmx2048m -Xms2048m -XX:+HeapDumpOnOutOfMemoryError"

@@ -1,0 +1,221 @@
+---
+- name: set Selinux
+  command: setenforce 0
+
+- name: set Selinux
+  command: sed -i s/^SELINUX=.*$/SELINUX=permissive/ /etc/selinux/config
+
+- name: Set Ulimit
+  raw: echo "sonar   -   nofile   65536" >> /etc/security/limits.conf
+
+- name: Set Ulimit
+  raw: echo "sonar   -   nproc    4096" >> /etc/security/limits.conf
+
+- name: Set Ulimit
+  raw: echo "root    -   nofile   65536" >> /etc/security/limits.conf
+
+- name: Set Ulimit
+  raw: echo "root    -   nproc    4096" >> /etc/security/limits.conf
+
+- name: Set fs.file
+  raw: echo "fs.file-max=65536" >> /etc/sysctl.conf
+
+- name: Set vm.max.map
+  raw: echo "vm.max_map_count=262144" >> /etc/sysctl.conf
+
+- name: install nodejsrepo
+  shell:
+   cmd: sudo curl -sL https://rpm.nodesource.com/setup_13.x | bash -
+
+- name: Install nodejs
+  yum:
+   name: nodejs
+   state: present
+
+- name: install wget
+  shell:
+   cmd: yum install wget -y
+
+- name: Install gcc-c++
+  yum:
+   name: gcc-c++
+   state: latest
+
+- name: Install jdk-11
+  yum:
+   name: java-11-openjdk
+   state: latest
+
+- name: Install make
+  yum:
+   name: make
+   state: latest
+
+- name: Install unzip
+  yum:
+   name: unzip
+   state: latest
+
+- name: install Angular
+  shell:
+   cmd: npm install -g @angular/cli
+
+- name: install webpack
+  shell:
+   cmd: npm i -g webpack && npm i -g webpack-cli
+
+- name: Install PostgreSQL RPM
+  yum:
+    name: https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+    state: present
+
+- name: Removing postgreSql
+  yum:
+    name: postgr*
+    state: removed
+
+- name: remove postgres dependency
+  shell:
+   cmd: rm -rf /etc/sysconfig/pgsql /var/lib/pgsql /usr/share/pgsql
+ 
+- name: Install PostgreSQL
+  yum:
+    name: '{{ item }}'
+    state: latest
+  with_items:
+     - postgresql12-server
+     - postgresql12-contrib
+     - postgresql12-devel
+     - python-psycopg2
+  become: true
+  register: installed_psql
+
+- name: Intialize PostgreSQL DB
+  command: /usr/pgsql-12/bin/postgresql-12-setup initdb
+  become: true
+  when: installed_psql.changed
+
+- name: copy file pg_hba.conf
+  template:
+    src: pg_hba.conf
+    dest:  /var/lib/pgsql/12/data/pg_hba.conf
+    owner: root
+    group: root
+    mode:  0644
+
+
+- name: Enable and Start PostgreSQL
+  service:
+    name: postgresql-12
+    state: started
+    enabled: yes
+  become: true
+
+- name: Create a database for Sonar.
+  postgresql_db:
+    name: sonar
+    state: present
+
+- name: Create a sonar user.
+  postgresql_user:
+    db: sonar
+    name: sonar
+   # host: localhost
+   # priv: snoar.*:ALL
+    password: sonar123@
+    encrypted: yes
+  #with_items: localhost
+  become: true
+  become_user: postgres
+ 
+- name: Download Sonar.
+  get_url:
+    url: https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-7.9.1.zip
+    dest: /opt/sonarqube-7.9.1.zip
+
+- name: Unzip Sonar.
+  unarchive:
+    src: /opt/sonarqube-7.9.1.zip
+    dest: /usr/local/
+    copy: false
+    creates: /usr/local/sonar/COPYING
+
+
+- name: Move Sonar into place.
+  command: >
+    mv /usr/local/sonarqube-7.9.1 /usr/local/sonar
+    creates=/usr/local/sonar/COPYING
+- include: configure.yml
+
+- name: Add Unix Admins users
+  user: 
+   name: sonar 
+   group: users 
+   groups: wheel
+   state: present
+
+- name: Make sure we have a 'wheel' group
+  group:
+    name=wheel
+    state=present
+
+    #- name: sonar group adding
+    # command: groupadd sonar
+
+- name: Changing owner to Sonar directory
+  command: chown -R sonar:sonar /usr/local/sonar
+
+- name: copy file sonar.sh
+  template:
+    src: sonar.sh
+    dest:  /usr/local/sonar/bin/linux-x86-64/sonar.sh
+    owner: sonar
+    group: sonar
+    mode:  0755
+
+- name: Symlink sonar bin.
+  file:
+    src: /usr/local/sonar/bin/linux-x86-64/sonar.sh
+    dest: /usr/bin/sonar
+    state: link
+  register: sonar_symlink
+
+- name: Add sonar as init script for service management.
+  file:
+    src: /usr/local/sonar/bin/linux-x86-64/sonar.sh
+    dest: /etc/init.d/sonar
+    state: link
+ 
+- name: Copy SonarQube systemd unit file into place (for systemd systems).
+  template:
+    src: sonar.unit.j2
+    dest: /etc/systemd/system/sonar.service
+    owner: root
+    group: root
+    mode: 0666
+
+- name: "Create user accounts"
+  user:
+   name: "sonar"
+   groups: "wheel"
+   
+- name: "Allow admin users to sudo without a password"
+  lineinfile:
+   dest: "/etc/sudoers" # path: in version 2.3
+   state: "present"
+   regexp: "^sonar"
+   line: "sonar ALL=(ALL) NOPASSWD: ALL"
+ 
+- name: Ensure Sonar is running and set to start on boot.
+  service: 
+   name=sonar 
+   state=restarted 
+   enabled=yes
+
+- name: Allow Sonar time to build on first start.
+  pause: seconds=180
+  when: sonar_symlink.changed
+  tags: ['skip_ansible_lint']
+
+
+
